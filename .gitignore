@@ -1,0 +1,19 @@
+# 빌드 결과물
+*.o            # 오브젝트 파일
+*.out          # 실행 파일 또는 빌드 결과
+*.a            # 정적 라이브러리
+
+# BPF skeleton 파일
+*.skel.h       # BPF 자동 생성 헤더
+
+# 기타 바이너리
+*.bin
+*.elf
+
+# bpftool 디렉토리 (서브모듈일 경우)
+src/bpftool/
+
+# 에디터 및 시스템 파일
+*.swp
+*.log
+.DS_Store
