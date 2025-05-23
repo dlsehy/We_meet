@@ -22,13 +22,28 @@ static void handle_signal(int sig) {
 static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz) {
     struct event *e = data;
 
-    if (e->event_type == 2) { // open
-        printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"open\", \"filename\": \"%s\"}\n",
-               e->pid, e->comm, e->filename);
-    } else {
-        printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"%s\"}\n",
-               e->pid, e->comm,
-               e->event_type == 0 ? "exec" : "exit");
+    switch (e->event_type) {
+        case 0:
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"exec\"}\n", e->pid, e->comm);
+            break;
+        case 1:
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"exit\"}\n", e->pid, e->comm);
+            break;
+        case 2:
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"open\", \"filename\": \"%s\"}\n", e->pid, e->comm, e->filename);
+            break;
+        case 3:
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"tcp_connect\", \"daddr\": \"%u.%u.%u.%u\", \"dport\": %u}\n",
+                   e->pid, e->comm,
+                   (e->daddr >>  0) & 0xff,
+                   (e->daddr >>  8) & 0xff,
+                   (e->daddr >> 16) & 0xff,
+                   (e->daddr >> 24) & 0xff,
+                   e->dport);
+            break;
+        default:
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"unknown\"}\n", e->pid, e->comm);
+            break;
     }
 }
 
@@ -68,7 +83,7 @@ int main() {
         .sample_cb = handle_event,
         .lost_cb = handle_lost_events,
     };
-    
+
     pb = perf_buffer__new(bpf_map__fd(skel->maps.events), 8, &pb_opts);
 
     if (!pb) {

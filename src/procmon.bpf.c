@@ -1,8 +1,8 @@
 #include "vmlinux.h"             // BTF 기반 타입 정보
-#include <linux/bpf.h>           // BPF 프로그램 매크로/상수 정의
 #include <bpf/bpf_helpers.h>     // helper function들
 #include <bpf/bpf_tracing.h>     // tracepoint용
 #include <bpf/bpf_core_read.h>   // bpf_core_read 등
+#include <bpf/bpf_endian.h>
 #include "event.h"
 
 char LICENSE[] SEC("license") = "GPL";
@@ -54,6 +54,25 @@ int handle_open(struct sys_enter_args *ctx) {
     // 파일 경로는 syscall 인자로부터 추출
     const char *filename = (const char *)ctx->args[1];
     bpf_probe_read_str(evt.filename, sizeof(evt.filename), filename);
+
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &evt, sizeof(evt));
+    return 0;
+}
+SEC("kprobe/tcp_connect")
+int BPF_KPROBE(handle_tcp_connect, struct sock *sk) {
+    struct event evt = {};
+    __u16 dport;
+    __u32 daddr;
+
+    evt.pid = bpf_get_current_pid_tgid() >> 32;
+    bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
+    evt.event_type = 3;
+
+    bpf_core_read(&dport, sizeof(dport), &sk->__sk_common.skc_dport);
+    bpf_core_read(&daddr, sizeof(daddr), &sk->__sk_common.skc_daddr);
+
+    evt.dport = __bpf_ntohs(dport);
+    evt.daddr = daddr;
 
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &evt, sizeof(evt));
     return 0;

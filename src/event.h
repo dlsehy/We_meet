@@ -1,8 +1,16 @@
-#include <stdint.h>
+#ifndef __EVENT_H
+#define __EVENT_H
+
+// #include <stdint.h> 
 
 struct event {
-    uint32_t pid;
+    __u32 pid;
     char comm[16];
-    uint8_t event_type;  // 0 = exec, 1 = exit
-    char filename[256];  // 파일명도 전달
+    __u8 event_type; // 0 = exec, 1 = exit, 2 = open, 3 = tcp_connect
+    char filename[256]; // open 용
+    __u32 saddr;
+    __u32 daddr;
+    __u16 dport;
 };
+
+#endif
