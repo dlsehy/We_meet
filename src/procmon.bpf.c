@@ -29,16 +29,24 @@ SEC("tracepoint/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx) {
     struct event evt = {};
     evt.pid = bpf_get_current_pid_tgid() >> 32;
+
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    evt.ppid = BPF_CORE_READ(task, real_parent, tgid);
+
     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
     evt.event_type = 0;
+
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &evt, sizeof(evt));
     return 0;
 }
+
 
 SEC("tracepoint/sched/sched_process_exit")
 int handle_exit(struct trace_event_raw_sched_process_exit *ctx) {
     struct event evt = {};
     evt.pid = bpf_get_current_pid_tgid() >> 32;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    evt.ppid = BPF_CORE_READ(task, real_parent, tgid);
     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
     evt.event_type = 1;
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &evt, sizeof(evt));
@@ -55,11 +63,13 @@ int handle_open(struct sys_enter_args *ctx) {
     const char *filename = (const char *)ctx->args[1];
     bpf_probe_read_str(evt.filename, sizeof(evt.filename), filename);
 
+    bpf_printk("📂 open: pid=%d file=%s\n", evt.pid, evt.filename); // 디버깅
+
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &evt, sizeof(evt));
     return 0;
 }
 SEC("kprobe/tcp_connect")
-int BPF_KPROBE(handle_tcp_connect, struct sock *sk) {
+int handle_tcp_connect(struct pt_regs *ctx, struct sock *sk) {
     struct event evt = {};
     __u16 dport;
     __u32 daddr;
@@ -67,6 +77,8 @@ int BPF_KPROBE(handle_tcp_connect, struct sock *sk) {
     evt.pid = bpf_get_current_pid_tgid() >> 32;
     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
     evt.event_type = 3;
+
+    sk = (struct sock *)PT_REGS_PARM1(ctx);
 
     bpf_core_read(&dport, sizeof(dport), &sk->__sk_common.skc_dport);
     bpf_core_read(&daddr, sizeof(daddr), &sk->__sk_common.skc_daddr);

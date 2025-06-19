@@ -24,17 +24,17 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz) {
 
     switch (e->event_type) {
         case 0:
-            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"exec\"}\n", e->pid, e->comm);
+            printf("{\"pid\": %u, \"ppid\": %u, \"comm\": \"%s\", \"event_type\": %u}\n", e->pid, e->ppid, e->comm, e->event_type);
             break;
         case 1:
-            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"exit\"}\n", e->pid, e->comm);
+            printf("{\"pid\": %u, \"ppid\": %u, \"comm\": \"%s\", \"event_type\": %u}\n", e->pid, e->ppid, e->comm, e->event_type);
             break;
         case 2:
-            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"open\", \"filename\": \"%s\"}\n", e->pid, e->comm, e->filename);
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": %u, \"filename\": \"%s\"}\n", e->pid, e->comm, e->event_type, e->filename);
             break;
         case 3:
-            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"tcp_connect\", \"daddr\": \"%u.%u.%u.%u\", \"dport\": %u}\n",
-                   e->pid, e->comm,
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": %u, \"daddr\": \"%u.%u.%u.%u\", \"dport\": %u}\n",
+                   e->pid, e->comm, e->event_type,
                    (e->daddr >>  0) & 0xff,
                    (e->daddr >>  8) & 0xff,
                    (e->daddr >> 16) & 0xff,
@@ -42,7 +42,7 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz) {
                    e->dport);
             break;
         default:
-            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": \"unknown\"}\n", e->pid, e->comm);
+            printf("{\"pid\": %u, \"comm\": \"%s\", \"event_type\": %u}\n", e->pid, e->comm, e->event_type);
             break;
     }
 }
@@ -77,6 +77,17 @@ int main() {
         fprintf(stderr, "Failed to attach BPF programs\n");
         procmon_bpf__destroy(skel);
         return 1;
+    }
+
+    if (skel->progs.handle_tcp_connect) {
+        struct bpf_link *link = bpf_program__attach_kprobe(skel->progs.handle_tcp_connect, false, "tcp_connect");
+        if (!link) {
+            fprintf(stderr, "❌ Failed to manually attach handle_tcp_connect via kprobe\n");
+        } else {
+            printf("✅ handle_tcp_connect manually attached via kprobe\n");
+        }
+    } else {
+        fprintf(stderr, "⚠️ handle_tcp_connect not found in skel\n");
     }
 
     struct perf_buffer_opts pb_opts = {
